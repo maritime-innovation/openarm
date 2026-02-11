@@ -36,6 +36,118 @@ The default demo uses motors 0x01, 0x02, 0x07 (DM4310) on CAN0 with CANFD. If yo
 openarm-can-demo
 ```
 
+## Event Demo: Move IDs 1 to 8
+
+For event demos where you want to move all configured IDs (`0x01` to `0x08`), use a full ID map and run a simple sequential position routine.
+
+### 1) Configure all motor IDs
+
+In `examples/demo.cpp`, set IDs to match the standard OpenArm mapping:
+
+```cpp
+// Arm joints: J1-J7
+std::vector<openarm::damiao_motor::MotorType> motor_types = {
+    openarm::damiao_motor::MotorType::DM8009, // J1
+    openarm::damiao_motor::MotorType::DM8009, // J2
+    openarm::damiao_motor::MotorType::DM4340, // J3
+    openarm::damiao_motor::MotorType::DM4340, // J4
+    openarm::damiao_motor::MotorType::DM4310, // J5
+    openarm::damiao_motor::MotorType::DM4310, // J6
+    openarm::damiao_motor::MotorType::DM4310  // J7
+};
+
+std::vector<uint32_t> send_can_ids = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+std::vector<uint32_t> recv_can_ids = {0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17};
+
+// Gripper: J8
+openarm.init_gripper_motor(openarm::damiao_motor::MotorType::DM4310, 0x08, 0x18);
+```
+
+### 2) Add a simple sequential motion loop
+
+After motors are enabled, add a routine that moves one joint at a time with conservative targets:
+
+```cpp
+// Demo: move IDs 1-7 one-by-one using small position offsets.
+const float kSmallTargetRad = 0.15f;
+
+for (size_t i = 0; i < send_can_ids.size(); ++i) {
+    std::vector<openarm::damiao_motor::MITParam> cmd(send_can_ids.size(),
+        openarm::damiao_motor::MITParam{2.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+
+    cmd[i] = openarm::damiao_motor::MITParam{2.0f, 1.0f, kSmallTargetRad, 0.0f, 0.0f};
+    openarm.get_arm().mit_control_all(cmd);
+    openarm.recv_all(800);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    cmd[i] = openarm::damiao_motor::MITParam{2.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    openarm.get_arm().mit_control_all(cmd);
+    openarm.recv_all(800);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+}
+
+// ID 8 (gripper) open/close demo
+openarm.get_gripper().open();
+openarm.recv_all(1000);
+std::this_thread::sleep_for(std::chrono::milliseconds(400));
+openarm.get_gripper().close();
+openarm.recv_all(1000);
+```
+
+:::warning
+Start with very small target values and low speed/torque limits. Increase gradually only after confirming safe motion and correct zero positions.
+:::
+
+## Bimanual Demo: Use can0 and can1
+
+For dual-arm setups, run each arm on its own CAN bus:
+
+- Right arm: `can0`
+- Left arm: `can1`
+
+### 1) Bring up both CAN interfaces
+
+```bash
+openarm-can-configure-socketcan can0 -fd -b 1000000 -d 5000000
+openarm-can-configure-socketcan can1 -fd -b 1000000 -d 5000000
+```
+
+### 2) Verify traffic on each bus
+
+Use separate terminals:
+
+```bash
+candump can0
+```
+
+```bash
+candump can1
+```
+
+### 3) If you use `openarm-can-demo` (C++ demo)
+
+`openarm_can/examples/demo.cpp` uses one interface per process. Select the interface in code:
+
+```cpp
+openarm::can::socket::OpenArm openarm("can0", true);
+```
+
+Switch to `"can1"` for the other arm and run as a separate process (or on another machine/controller).
+
+### 4) If you use ROS2 bimanual control
+
+Use explicit left/right CAN mapping:
+
+```bash
+ros2 launch openarm_description openarm.bimanual.launch.py \
+  right_can_interface:=can0 \
+  left_can_interface:=can1
+```
+
+:::tip
+If both arms share the same CAN ID set (`0x01` to `0x08`), keep them on separate buses (`can0` and `can1`) to avoid ID conflicts.
+:::
+
 ## What the Demo Does
 
 The demo program performs these operations:

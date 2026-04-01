@@ -167,3 +167,46 @@ build/openarm-can-demo
 
 Congrats! You have completed the basic setup.
 If the demo runs successfully, you can now develop custom applications using the OpenArm API or try ROS2 integration.
+
+### Try MoveIt2 (ROS2)
+
+If you want to run OpenArm with MoveIt2, start with fake hardware first.
+
+1. Install ROS2 + MoveIt2 packages (Humble example):
+
+```bash
+sudo apt update
+sudo apt install -y \
+    ros-humble-desktop \
+    ros-humble-controller-manager \
+    ros-humble-gripper-controllers \
+    ros-humble-hardware-interface \
+    ros-humble-joint-state-broadcaster \
+    ros-humble-joint-trajectory-controller \
+    ros-humble-moveit-configs-utils \
+    ros-humble-moveit-planners \
+    ros-humble-moveit-ros-move-group \
+    ros-humble-moveit-ros-visualization
+```
+
+2. Build the OpenArm ROS2 workspace:
+
+```bash
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+git clone https://github.com/enactic/openarm_ros2
+vcs import < ./openarm_ros2/openarm.repos
+
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build
+source ~/ros2_ws/install/setup.bash
+```
+
+3. Launch MoveIt2 demo:
+
+```bash
+ros2 launch openarm_bimanual_moveit_config demo.launch.py
+```
+
+For more details, see [ROS2 Control and MoveIt2](../ros2/control).

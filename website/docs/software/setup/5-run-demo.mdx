@@ -209,4 +209,58 @@ source ~/ros2_ws/install/setup.bash
 ros2 launch openarm_bimanual_moveit_config demo.launch.py
 ```
 
+### Real Hardware Operations (CAN + MoveIt2)
+
+For real hardware operation, use these commands for safe restart and health checks.
+
+1. Re-enable CAN interfaces:
+
+```bash
+sudo ip link set can0 down 2>/dev/null || true
+sudo ip link set can1 down 2>/dev/null || true
+sudo ip link set can0 up type can bitrate 1000000 dbitrate 5000000 fd on
+sudo ip link set can1 up type can bitrate 1000000 dbitrate 5000000 fd on
+
+ip -br link | grep -E 'can0|can1'
+ip -details link show can0
+ip -details link show can1
+```
+
+2. Restart MoveIt2 with log capture:
+
+```bash
+pkill -f "openarm_bimanual_moveit_config demo.launch.py" || true
+pkill -f move_group || true
+pkill -f rviz2 || true
+
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+mkdir -p ~/logs/openarm
+LOG=~/logs/openarm/moveit_restart_$(date +%F_%H%M%S).log
+ros2 launch openarm_bimanual_moveit_config demo.launch.py 2>&1 | tee "$LOG"
+```
+
+3. Verify hardware and controllers in another terminal:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+ros2 control list_hardware_components
+ros2 control list_controllers
+ros2 topic hz /joint_states
+```
+
+4. Check common planning failures from logs:
+
+```bash
+grep -nE 'ERROR|WARN|Failed|failed|Socket|can0|can1|joint_states|ABORTED|No solution|start state|No acceleration limit' "$LOG"
+```
+
+### Known MoveIt2 Tuning Notes
+
+- If planning fails with `Start state out of bounds`, check the corresponding joint limit in `openarm_description/config/arm/v10/joint_limits.yaml`.
+- If planning fails with `No acceleration limit was defined`, enable acceleration limits in `openarm_bimanual_moveit_config/config/joint_limits.yaml`.
+
 For more details, see [ROS2 Control and MoveIt2](../ros2/control).
